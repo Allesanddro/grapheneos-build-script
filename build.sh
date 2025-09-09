@@ -88,8 +88,18 @@ export PATH="$HOME/bin:$PATH"
 # === 5. Init / update repo ===
 mkdir -p "$WORKDIR"
 cd "$WORKDIR"
+
+rm out/ -rf
+
+echo "[*] Resetting repository to a clean state..."
+repo forall -c 'git reset --hard'
+repo forall -c 'git clean -fdx'
+
+echo "[*] Initializing and syncing repository for tag $TAG_NAME..."
 repo init -u https://github.com/GrapheneOS/platform_manifest.git -b "$TAG_NAME"
-repo sync -j"$(nproc)"
+repo sync -c -j"$(nproc)" --force-sync
+
+
 
 # === 6. adevtool prep ===
 yarn install --cwd vendor/adevtool/
