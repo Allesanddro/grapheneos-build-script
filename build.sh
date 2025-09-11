@@ -21,6 +21,56 @@ fi
 echo "[*] Using tag: $TAG_INPUT"
 echo "[*] Using channel: $RELEASE_CHANNEL"
 
+# === CLEAN MODE (auto + override) ===
+CLEAN_MODE="auto"
+
+for arg in "$@"; do
+  case "$arg" in
+    --clean=*)
+      CLEAN_MODE="${arg#*=}"
+      ;;
+  esac
+done
+
+PREV_BUILD_FILE="$HOME/grapheneos-build/last_build.txt"
+LAST_TAG=""
+[ -f "$PREV_BUILD_FILE" ] && LAST_TAG=$(cat "$PREV_BUILD_FILE")
+
+if [ "$CLEAN_MODE" = "auto" ]; then
+  if [ "$TAG_INPUT" != "$LAST_TAG" ]; then
+    CLEAN_MODE="partial"
+  else
+    CLEAN_MODE="none"
+  fi
+fi
+
+echo "[*] Clean mode: $CLEAN_MODE"
+
+case "$CLEAN_MODE" in
+  none)
+    echo "[*] Skipping clean step"
+    ;;
+  partial)
+    echo "[*] Doing partial clean (device/product only)..."
+    rm -rf out/soong/.intermediates
+    rm -rf out/target/product/husky/obj
+    rm -rf out/target/product/husky/system
+    rm -rf out/target/product/husky/vendor
+    rm -rf out/target/product/husky/recovery
+    rm -rf out/target/product/husky/cache
+    ;;
+  full)
+    echo "[*] Doing full clean (entire out/)..."
+    rm -rf out/
+    ;;
+  *)
+    echo "ERROR: Unknown clean mode '$CLEAN_MODE' (use none|partial|full|auto)"
+    exit 1
+    ;;
+esac
+
+
+
 # === CONFIG ===
 WORKDIR="$HOME/grapheneos-build"
 TAG_NAME="refs/tags/${TAG_INPUT}"
@@ -89,7 +139,7 @@ export PATH="$HOME/bin:$PATH"
 mkdir -p "$WORKDIR"
 cd "$WORKDIR"
 
-rm out/ -rf
+#rm out/ -rf
 
 echo "[*] Resetting repository to a clean state..."
 repo forall -c 'git reset --hard'
