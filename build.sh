@@ -58,6 +58,8 @@ case "$CLEAN_MODE" in
     rm -rf out/target/product/husky/vendor
     rm -rf out/target/product/husky/recovery
     rm -rf out/target/product/husky/cache
+    rm -f out/soong/build_number.txt
+    rm -f out/build_date.txt
     ;;
   full)
     echo "[*] Doing full clean (entire out/)..."
