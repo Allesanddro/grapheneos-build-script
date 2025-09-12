@@ -238,7 +238,6 @@ echo "[*] Uploading via rsync (SSH, overwrite enabled)..."
 
 rsync -avz --progress --delete --inplace \
   -e "ssh -i $SSH_KEY" \
-  --include='*/' \
   --include="${DEVICE}-factory-*.zip" \
   --include="${DEVICE}-install-*.zip" \
   --include="${DEVICE}-install-*.zip.sig" \
