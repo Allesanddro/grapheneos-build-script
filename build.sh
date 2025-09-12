@@ -21,58 +21,6 @@ fi
 echo "[*] Using tag: $TAG_INPUT"
 echo "[*] Using channel: $RELEASE_CHANNEL"
 
-# === CLEAN MODE (auto + override) ===
-CLEAN_MODE="auto"
-
-for arg in "$@"; do
-  case "$arg" in
-    --clean=*)
-      CLEAN_MODE="${arg#*=}"
-      ;;
-  esac
-done
-
-PREV_BUILD_FILE="$HOME/grapheneos-build/last_build.txt"
-LAST_TAG=""
-[ -f "$PREV_BUILD_FILE" ] && LAST_TAG=$(cat "$PREV_BUILD_FILE")
-
-if [ "$CLEAN_MODE" = "auto" ]; then
-  if [ "$TAG_INPUT" != "$LAST_TAG" ]; then
-    CLEAN_MODE="partial"
-  else
-    CLEAN_MODE="none"
-  fi
-fi
-
-echo "[*] Clean mode: $CLEAN_MODE"
-
-case "$CLEAN_MODE" in
-  none)
-    echo "[*] Skipping clean step"
-    ;;
-  partial)
-    echo "[*] Doing partial clean (device/product only)..."
-    rm -rf out/soong/.intermediates
-    rm -rf out/target/product/husky/obj
-    rm -rf out/target/product/husky/system
-    rm -rf out/target/product/husky/vendor
-    rm -rf out/target/product/husky/recovery
-    rm -rf out/target/product/husky/cache
-    rm -f out/soong/build_number.txt
-    rm -f out/build_date.txt
-    ;;
-  full)
-    echo "[*] Doing full clean (entire out/)..."
-    rm -rf out/
-    ;;
-  *)
-    echo "ERROR: Unknown clean mode '$CLEAN_MODE' (use none|partial|full|auto)"
-    exit 1
-    ;;
-esac
-
-
-
 # === CONFIG ===
 WORKDIR="$HOME/grapheneos-build"
 TAG_NAME="refs/tags/${TAG_INPUT}"
@@ -84,11 +32,66 @@ CN="WamboEDV"
 KEYDIR="$HOME/keys/$DEVICE"
 mkdir -p "$KEYDIR"
 
-# Upload target
+# Upload config
+UPLOAD_METHOD="ssh"   # options: ssh | rsyncd | rsh
 UPLOAD_USER="root"
 UPLOAD_HOST="192.168.178.128"
 UPLOAD_PATH="/var/www/grapheneos-releases"
 SSH_KEY="$HOME/.ssh/build_rsync"
+RSYNCD_MODULE="grapheneos"   # only used if UPLOAD_METHOD=rsyncd
+
+
+# === CLEAN OPTION ===
+CLEAN_MODE="none"   # default
+
+while [[ "$#" -gt 0 ]]; do
+  case "$1" in
+    --clean=*)
+      CLEAN_MODE="${1#*=}"
+      ;;
+  esac
+  shift
+done
+
+echo "[*] Clean mode: $CLEAN_MODE"
+
+case "$CLEAN_MODE" in
+  none)
+    echo "[*] Skipping clean step"
+    ;;
+  partial)
+    echo "[*] Doing partial clean (device/product only, keep full repo sync)..."
+    #rm -rf "$WORKDIR/out/soong/.intermediates"
+    #rm -rf "$WORKDIR/out/soong/.bootstrap"
+    #rm -rf "$WORKDIR/out/target/product/${DEVICE}/obj"
+    #rm -rf "$WORKDIR/out/target/product/${DEVICE}/system"
+    #rm -rf "$WORKDIR/out/target/product/${DEVICE}/vendor"
+    #rm -rf "$WORKDIR/out/target/product/${DEVICE}/recovery"
+    #rm -rf "$WORKDIR/out/target/product/${DEVICE}/cache"
+
+    # Remove build number + date cache
+    rm -f "$WORKDIR/out/soong/build_number.txt"
+    rm -f "$WORKDIR/out/build_date.txt"
+
+
+    # Remove intermediate packaging dirs
+    #rm -rf "$WORKDIR/out/target/product/${DEVICE}/obj/PACKAGING/target_files_intermediates/IMAGES"
+    ;;
+
+  full)
+    echo "[*] Doing full clean (entire out/)..."
+    rm -rf out/
+    ;;
+  *)
+    echo "ERROR: Unknown clean mode '$CLEAN_MODE' (use none|partial|full)"
+    exit 1
+    ;;
+esac
+
+
+
+
+
 
 # === HELPERS ===
 die(){ echo "ERROR: $*"; exit 1; }
@@ -143,9 +146,10 @@ cd "$WORKDIR"
 
 #rm out/ -rf
 
-echo "[*] Resetting repository to a clean state..."
+echo "[*] Resetting repository to a clean state (excluding vendor/adevtool/dl)..."
 repo forall -c 'git reset --hard'
-repo forall -c 'git clean -fdx'
+repo forall -c "git clean -fdx -e vendor/adevtool/dl/"
+
 
 echo "[*] Initializing and syncing repository for tag $TAG_NAME..."
 repo init -u https://github.com/GrapheneOS/platform_manifest.git -b "$TAG_NAME"
@@ -227,26 +231,25 @@ if [ -f "$PREV_BUILD_FILE" ]; then
 fi
 echo "$BUILD_NUMBER" > "$PREV_BUILD_FILE"
 
-# === 12. Upload release via rsync ===
+# === 12. Upload release via rsync over SSH ===
 echo "[*] Uploading release for channel: $RELEASE_CHANNEL"
 SOURCE_DIR="$WORKDIR/releases/${BUILD_NUMBER}/release-${DEVICE}-${BUILD_NUMBER}"
 [ ! -d "$SOURCE_DIR" ] && die "Release source dir missing: $SOURCE_DIR"
 
-# Deleting old channel file to ensure it's replaced by the new symlink.
-ssh -i "$SSH_KEY" "${UPLOAD_USER}@${UPLOAD_HOST}" "rm -f ${UPLOAD_PATH}/${DEVICE}-${RELEASE_CHANNEL}"
+echo "[*] Uploading via rsync (SSH, overwrite enabled)..."
 
-echo "[*] Uploading release files..."
-rsync -avzm -e "ssh -i $SSH_KEY" \
-    --include='*/' \
-    --include="${DEVICE}-factory-*.zip" \
-    --include="${DEVICE}-install-*.zip" \
-    --include="${DEVICE}-install-*.zip.sig" \
-    --include="${DEVICE}-ota_update-*.zip" \
-    --include="${DEVICE}-incremental-*.zip" \
-    --include="${DEVICE}-${RELEASE_CHANNEL}" \
-    --exclude='*' \
-    "$SOURCE_DIR/" \
-    "${UPLOAD_USER}@${UPLOAD_HOST}:${UPLOAD_PATH}/"
+rsync -lptgDvzr --progress --delete --inplace \
+  -e "ssh -i $SSH_KEY" \
+  --include="${DEVICE}-factory-*.zip" \
+  --include="${DEVICE}-install-*.zip" \
+  --include="${DEVICE}-install-*.zip.sig" \
+  --include="${DEVICE}-ota_update-*.zip" \
+  --include="${DEVICE}-incremental-*.zip" \
+  --include="${DEVICE}-${RELEASE_CHANNEL}" \
+  --exclude='*' \
+  "$SOURCE_DIR/" \
+  "${UPLOAD_USER}@${UPLOAD_HOST}:${UPLOAD_PATH}/"
+
 
 echo
 echo "=== DONE ==="
