@@ -33,12 +33,10 @@ KEYDIR="$HOME/keys/$DEVICE"
 mkdir -p "$KEYDIR"
 
 # Upload config
-UPLOAD_METHOD="ssh"   # options: ssh | rsyncd | rsh
 UPLOAD_USER="root"
 UPLOAD_HOST="192.168.178.128"
 UPLOAD_PATH="/var/www/grapheneos-releases"
 SSH_KEY="$HOME/.ssh/build_rsync"
-RSYNCD_MODULE="grapheneos"   # only used if UPLOAD_METHOD=rsyncd
 
 
 # === CLEAN OPTION ===
@@ -80,7 +78,7 @@ case "$CLEAN_MODE" in
 
   full)
     echo "[*] Doing full clean (entire out/)..."
-    rm -rf out/
+    rm -rf "$WORKDIR/out/"
     ;;
   *)
     echo "ERROR: Unknown clean mode '$CLEAN_MODE' (use none|partial|full)"
@@ -147,8 +145,8 @@ cd "$WORKDIR"
 #rm out/ -rf
 
 echo "[*] Resetting repository to a clean state (excluding vendor/adevtool/dl)..."
-repo forall -c 'git reset --hard'
-repo forall -c "git clean -fdx -e vendor/adevtool/dl/"
+repo forall -c "git reset --hard"
+repo forall -c "git clean -fdx -e dl/"
 
 
 echo "[*] Initializing and syncing repository for tag $TAG_NAME..."
@@ -240,6 +238,7 @@ echo "[*] Uploading via rsync (SSH, overwrite enabled)..."
 
 rsync -avz --progress --delete --inplace \
   -e "ssh -i $SSH_KEY" \
+  --include='*/' \
   --include="${DEVICE}-factory-*.zip" \
   --include="${DEVICE}-install-*.zip" \
   --include="${DEVICE}-install-*.zip.sig" \
@@ -249,7 +248,6 @@ rsync -avz --progress --delete --inplace \
   --exclude='*' \
   "$SOURCE_DIR/" \
   "${UPLOAD_USER}@${UPLOAD_HOST}:${UPLOAD_PATH}/"
-
 
 echo
 echo "=== DONE ==="
