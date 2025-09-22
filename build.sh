@@ -244,7 +244,7 @@ rsync -avz --progress --delete --inplace \
   --include="${DEVICE}-ota_update-*.zip" \
   --include="${DEVICE}-incremental-*.zip" \
   --include="${DEVICE}-${RELEASE_CHANNEL}" \
-  --exclude='*' \
+  --exclude='*/' \
   "$SOURCE_DIR/" \
   "${UPLOAD_USER}@${UPLOAD_HOST}:${UPLOAD_PATH}/"
 
