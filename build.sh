@@ -236,7 +236,7 @@ SOURCE_DIR="$WORKDIR/releases/${BUILD_NUMBER}/release-${DEVICE}-${BUILD_NUMBER}"
 
 echo "[*] Uploading via rsync (SSH, overwrite enabled)..."
 
-rsync -avz --progress --delete --inplace \
+rsync -avmz --progress --delete --inplace \
   -e "ssh -i $SSH_KEY" \
   --include="${DEVICE}-factory-*.zip" \
   --include="${DEVICE}-install-*.zip" \
